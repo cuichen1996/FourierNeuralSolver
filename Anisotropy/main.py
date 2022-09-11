@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+# @Author: Your name
+# @Date:   2022-09-11 05:47:33
+# @Last Modified by:   Your name
+# @Last Modified time: 2022-09-11 05:59:20
 import json
 import logging
 import os
@@ -98,9 +103,13 @@ if __name__ == '__main__':
     config["test_theta"]    = 0
 
     # model
-    config["softshrink"]      = 1e-4
-    config["paras_size"]      = (127, 127)
-    config["mid_size"]        = 20
+    config["smoother_times"] = 1
+    config["alpha"] = 3
+    config["m"] = 10
+
+    config["mid_chanel"] = 4
+    config["act"] = "relu"
+    
     config["max_iter_num"]    = 2000
     config["error_threshold"] = 1e-6
     config["K"]               = 10
@@ -113,19 +122,20 @@ if __name__ == '__main__':
     config["lam_max"]         = 4.
     config["niters"]          = 64
     # dir
-    config['run_dir'] = "expriments/ScSmooth256"
+    config['run_dir'] = "expriments/Cheby"
     config['checkpoints_folder'] = config['run_dir'] + '/checkpoints'
     config['prediction_folder'] = config['run_dir'] + '/prediction'
-    config['restart_dir'] = 'expriments/ScSmooth256/checkpoints'
+    config['restart_dir'] = 'expriments/Cheby/checkpoints'
 
     # train
     config['lr']            = 1e-4
     config['epoch']         = 20000
     config['ckpt_freq']     = 10
-    config['restart_epoch'] = 330  # 420    
+    config['restart_epoch'] = 330   
+     
     # 是否加载预训练模型
     config['restart'] = True
-    # config['restart'] = False
+    config['restart'] = False
     # 是否训练
     config['train'] = False
     config['train'] = True

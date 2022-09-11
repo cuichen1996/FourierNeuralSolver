@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+# @Author: Your name
+# @Date:   2022-09-11 05:47:33
+# @Last Modified by:   Your name
+# @Last Modified time: 2022-09-11 05:56:10
 import numpy as np
 import torch
 import torch.nn as nn
@@ -51,10 +56,10 @@ def getActivationFunction(
 
 ##* smoother \Phi
 class ChebySemi(nn.Module):
-    def __init__(self, N, niters=15):
+    def __init__(self, alpha, niters=15):
         super(ChebySemi, self).__init__()
         self.niters = niters
-        self.h = 1/N
+        self.alpha = alpha
         self.roots = [np.cos((np.pi*(2*i+1)) / (2*self.niters)) for i in range(self.niters)]
 
     def forward(self, x, f, kernelA):
@@ -64,27 +69,25 @@ class ChebySemi(nn.Module):
                 y = BatchConv2d(u, kernelA)      
                 m = torch.max(torch.max(torch.abs(y),dim=2).values, dim=2).values.reshape(x.shape[0], 1, 1, 1)
                 u = y / m
-            taus = [2 / (m + m*self.h - (m*self.h - m) * r) for r in self.roots]
+            taus = [2 / (m + m/self.alpha - (m/self.alpha - m) * r) for r in self.roots]
         for k in range(self.niters):
             Ax = BatchConv2d(x, kernelA) 
             x = x + taus[k]*(f - Ax)
         return x
     
 class Jacobi(nn.Module):
-    def __init__(self, w, k):
+    def __init__(self, w):
         super(Jacobi, self).__init__()
         self.w = w
-        self.k = k
     def forward(self, x, f, kernelA):
         weight = self.w/kernelA[:,:,1,1]
         weight = weight.unsqueeze(1).unsqueeze(1)
-        for i in range(self.k):
-            Ax = BatchConv2d(x, kernelA) 
-            x = x + weight*(f - Ax)
+        Ax = BatchConv2d(x, kernelA) 
+        x = x + weight*(f - Ax)
         return x
 
 class MetaScSmoother(nn.Module):
-    def __init__(self, mL = 3, kernelSize = 7):
+    def __init__(self, mL=3, kernelSize=7):
         super(MetaScSmoother, self).__init__()
         self.mL = mL
         self.L = 2*mL+1
@@ -94,7 +97,8 @@ class MetaScSmoother(nn.Module):
         self.fc2 = nn.Sequential(nn.Linear(9, 200), nn.ReLU(inplace=True),
                                 nn.Linear(200, mL*mL*kernelSize*kernelSize))
 
-    def forward(self, r, kernelA):
+    def forward(self, x, f, kernelA):
+        r = f - BatchConv2d(x, kernelA)
         batchSize = r.shape[0]
         mu=r.shape[2]
         weights1 = self.fc1(kernelA.view(batchSize, 9)).view(batchSize, self.mL, 1, self.kernelSize, self.kernelSize)
@@ -113,12 +117,12 @@ class MetaScSmoother(nn.Module):
         M = torch.matmul(S, S.permute(0,2,1))
         b = torch.matmul(S, lr)
         K = torch.linalg.solve(M, b)
-        return torch.matmul(K.permute((0,2,1)), G.view(-1, self.L, mu*mu)).view(-1, 1, mu, mu)
-
+        x = x + torch.matmul(K.permute((0,2,1)), G.view(-1, self.L, mu*mu)).view(-1, 1, mu, mu)
+        return x 
 
 #* H with Hadamard product
 class PoissonH(nn.Module):
-    def __init__(self, mid_chanel, act):
+    def __init__(self, mid_chanel, act, N):
         super(PoissonH, self).__init__()
         self.meta = nn.Sequential(
             nn.ConvTranspose2d(1,mid_chanel,3,stride=2,padding=1),
@@ -129,13 +133,17 @@ class PoissonH(nn.Module):
             getActivationFunction(act),           
             nn.ConvTranspose2d(mid_chanel,mid_chanel,3,stride=2,padding=1),
             getActivationFunction(act),
-            nn.ConvTranspose2d(mid_chanel,2,3,stride=2,padding=2)).double()
+            nn.ConvTranspose2d(mid_chanel,mid_chanel,3,stride=2,padding=1),
+            getActivationFunction(act),           
+            nn.ConvTranspose2d(mid_chanel,mid_chanel,3,stride=2,padding=1),
+            getActivationFunction(act),
+            nn.ConvTranspose2d(mid_chanel,2,3,stride=2,padding=2),
+            nn.AdaptiveAvgPool2d(N)).double()
         
     def forward(self, r, kernelA):
         batch_size, N = r.shape[0], r.shape[2]
         weights = self.meta(kernelA).view(batch_size, 1, N, N, 2)
         weights = torch.view_as_complex(weights)
-        
         r_hat = torch.fft.fft2(r, norm='ortho')
         out_ft = r_hat * weights
         e = torch.fft.irfft2(out_ft, dim=(2, 3), s=(r.size(-2), r.size(-1)), norm='ortho')  
@@ -143,7 +151,7 @@ class PoissonH(nn.Module):
     
 #* H with matrix multiplication
 class KernelH(nn.Module):
-    def __init__(self, mid_chanel, act):
+    def __init__(self, mid_chanel, act, N):
         super(KernelH, self).__init__()
         self.meta = nn.Sequential(
             nn.ConvTranspose2d(1,mid_chanel,3,stride=2,padding=1),
@@ -154,7 +162,12 @@ class KernelH(nn.Module):
             getActivationFunction(act),           
             nn.ConvTranspose2d(mid_chanel,mid_chanel,3,stride=2,padding=1),
             getActivationFunction(act),
-            nn.ConvTranspose2d(mid_chanel,2,3,stride=2,padding=2)).double()
+            nn.ConvTranspose2d(mid_chanel,mid_chanel,3,stride=2,padding=1),
+            getActivationFunction(act),           
+            nn.ConvTranspose2d(mid_chanel,mid_chanel,3,stride=2,padding=1),
+            getActivationFunction(act),
+            nn.ConvTranspose2d(mid_chanel,2,3,stride=2,padding=2),
+            nn.AdaptiveAvgPool2d(N)).double()
 
     def compl_mul2d(self, input, weights):
         return torch.einsum("bcxy,bcyz->bcxz", input, weights)
@@ -173,11 +186,9 @@ class HyperFNS(nn.Module):
     def __init__(self, config):
         super(HyperFNS, self).__init__()
         self.N = config["N"]
-        self.smoother_factor = config["smoother_factor"]
-        
-        self.smoother = ChebySemi(self.N, config["m"])
-        
-        self.H = PoissonH(config["mid_chanel"], config["act"]).double() 
+        self.smoother_times = config["smoother_times"]
+        self.smoother = ChebySemi(config["alpha"], config["m"])
+        self.H = PoissonH(config["mid_chanel"], config["act"], self.N).double() 
         
         self.K = config["K"]
         self.error_threshold = config["error_threshold"]
@@ -189,7 +200,8 @@ class HyperFNS(nn.Module):
 
     def forward(self, x, f, kernelA):
         for i in range(self.K):
-            x = self.smoother(x, f, kernelA)
+            for j in range(self.smoother_times):
+                x = self.smoother(x, f, kernelA)
             r = f - BatchConv2d(x, kernelA)
             e = self.H(r, kernelA)
             x = x + e
@@ -201,7 +213,8 @@ class HyperFNS(nn.Module):
         res = 1
         i = 1
         while res > self.error_threshold and i < self.max_iter_num:
-            x = self.smoother(x, f, kernelA)
+            for j in range(self.smoother_times):
+                x = self.smoother(x, f, kernelA)
             r = f - BatchConv2d(x, kernelA)
             e = self.H(r, kernelA)
             x = x + e
