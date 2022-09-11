@@ -2,7 +2,7 @@
 # @Author: Your name
 # @Date:   2022-09-11 05:47:33
 # @Last Modified by:   Your name
-# @Last Modified time: 2022-09-11 05:59:20
+# @Last Modified time: 2022-09-11 06:05:34
 import json
 import logging
 import os
@@ -104,23 +104,21 @@ if __name__ == '__main__':
 
     # model
     config["smoother_times"] = 1
-    config["alpha"] = 3
-    config["m"] = 10
+    config["alpha"]          = 3
+    config["m"]              = 10
 
     config["mid_chanel"] = 4
-    config["act"] = "relu"
+    config["act"]        = "relu"
     
     config["max_iter_num"]    = 2000
     config["error_threshold"] = 1e-6
     config["K"]               = 10
     config["xavier_init"]     = 1e-2
+    
     if device == "cuda":
         config["use_cuda"] = True
     else:
         config["use_cuda"] = False
-        
-    config["lam_max"]         = 4.
-    config["niters"]          = 64
     # dir
     config['run_dir'] = "expriments/Cheby"
     config['checkpoints_folder'] = config['run_dir'] + '/checkpoints'

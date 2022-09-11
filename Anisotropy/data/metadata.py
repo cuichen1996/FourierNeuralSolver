@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+# @Author: Your name
+# @Date:   2022-09-11 05:47:33
+# @Last Modified by:   Your name
+# @Last Modified time: 2022-09-11 06:06:00
 # Generate data code from http://bicmr.pku.edu.cn/~dongbin/Data/MetaMgNet.rar
 
 import torch
@@ -29,7 +34,6 @@ def CreateKernelA(epsilons, data_num=100, repeat=True):
                 Kernelxy + epsilons[i, 3]*Kernelyy
 
     return KernelA
-
 
 # %%
 class CreateMetaDataset(data.Dataset):
@@ -86,21 +90,6 @@ def CreateMetaDatasetLoader(config):
     dataLoader = data.DataLoader(dataset, batch_size=config['batch_size'], shuffle=True)
     return dataLoader
 
-# config = {}
-# config["pde_num"] = 20
-# config["every_num"] = 100
-# config["loss"] = 'u' # 'u' or 'r'
-# config['batch_size'] = 100
-# config["N"] = 64
-# train_loader = CreateMetaDatasetLoader(config)
-
-# #%%
-# for f, kernelA, u in train_loader:
-#     print(f.shape, kernelA.shape, u.shape)
-#     break
-# %%
-
-# test
 from math import pi
 
 def CreateTestLoader(config):
